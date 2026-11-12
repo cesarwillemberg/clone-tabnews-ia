@@ -1,38 +1,15 @@
-import ConfettiEffect from './confetti-effect';
+import { Suspense } from 'react';
+import ConfettiLoader from './confetti-loader';
+import ContentCount from './content-count';
+import ContentCountErrorBoundary from './content-count-error-boundary';
 
-export const dynamic = 'force-dynamic';
+// O fetch ocorre em content-count.jsx; revalidamos lá também.
+export const revalidate = 60;
 
-const CONTENTS_API_URL = 'https://www.tabnews.com.br/api/v1/contents?per_page=1&page=1';
-
-async function getPublishedContentCount() {
-  const response = await fetch(CONTENTS_API_URL, { cache: 'no-store' });
-
-  if (!response.ok) {
-    throw new Error(`TabNews API respondeu com status ${response.status}.`);
-  }
-
-  const totalRows = response.headers.get('x-pagination-total-rows');
-  const count = Number(totalRows);
-
-  if (totalRows === null || !Number.isSafeInteger(count) || count < 0) {
-    throw new Error('A API do TabNews não retornou um total de conteúdos válido.');
-  }
-
-  return count;
-}
-
-export default async function Home() {
-  let publishedContentCount = null;
-
-  try {
-    publishedContentCount = await getPublishedContentCount();
-  } catch (error) {
-    console.error('Não foi possível carregar o total de conteúdos do TabNews.', error);
-  }
-
+export default function Home() {
   return (
     <main className="construction-page">
-      <ConfettiEffect />
+      <ConfettiLoader />
       <section className="construction-card" aria-labelledby="page-title">
         <p className="construction-label">
           <span className="construction-indicator" aria-hidden="true" />
@@ -45,24 +22,30 @@ export default async function Home() {
           trabalha com tecnologia e precisa consumir conteúdos com valor concreto.
         </p>
 
+        {/*
+          Regra 1.6 (Strategic Suspense Boundaries):
+          O shell da página renderiza imediatamente. O contador faz streaming
+          assim que o fetch da API do TabNews termina, sem bloquear o resto.
+        */}
         <p className="content-count" aria-live="polite">
-          {publishedContentCount === null ? (
-            <span className="content-count-unavailable">
-              Não foi possível carregar o total de conteúdos agora.
-            </span>
-          ) : (
-            <>
-              <strong>{publishedContentCount.toLocaleString('pt-BR')}</strong>
-              <span>conteúdos publicados no TabNews</span>
-            </>
-          )}
+          <ContentCountErrorBoundary>
+            <Suspense
+              fallback={
+                <span className="content-count-unavailable">
+                  Carregando total de conteúdos…
+                </span>
+              }
+            >
+              <ContentCount />
+            </Suspense>
+          </ContentCountErrorBoundary>
         </p>
 
         <a
           className="official-link"
           href="https://www.tabnews.com.br/"
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
         >
           Acessar o site oficial
           <span aria-hidden="true">↗</span>
